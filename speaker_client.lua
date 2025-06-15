@@ -1,7 +1,7 @@
 -- Speaker Client for ComputerCraft iPod Streaming
 local rednet_protocol = "iPodAudioStream_v1"
 local speaker = peripheral.find("speaker")
-local SYNC_DELAY = 0.3 -- Seconds to delay playback on client to sync with server
+local SYNC_DELAY = 0.3 -- Seconds to delay playback on client to sync with server, applied only at the start of a new song
 
 if not speaker then
     error("No speaker attached! Please connect a speaker.", 0)
@@ -36,14 +36,14 @@ while true do
     if protocol == rednet_protocol then
         if message.type == "audio_chunk" then
             if message.id == current_song_id or not current_song_id then -- Play if it's the current song or the first chunk of a new song
-                if not current_song_id then
+                if not current_song_id then -- This is the first chunk of a NEW song
                     current_song_id = message.id
                     term.setCursorPos(1, 3)
                     term.clearLine()
                     print("Playing new song: " .. (message.id or "Unknown ID"))
+                    os.sleep(SYNC_DELAY) -- Apply delay ONLY for the first chunk of a new song
                 end
                 if message.volume then current_volume = message.volume end
-                os.sleep(SYNC_DELAY) -- Added delay for synchronization
                 speaker.playAudio(message.buffer, current_volume)
             end
         elseif message.type == "stop_audio" then
