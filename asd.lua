@@ -1,6 +1,6 @@
-local api_base_url = "https://ipod-2to6magyna-uc.a.run.app/"
+local api_base_url = "https://ipod-2to6magy..."
 local version = "2.1"
-local rednet_protocol = "MufaroSyncStream" -- Protocol for Rednet communication
+local rednet_protocol = "iPodAudioStream_v1" -- Protocol for Rednet communication
 
 local width, height = term.getSize()
 local tab = 1
@@ -33,10 +33,9 @@ local decoder = require "cc.audio.dfpwm".make_decoder()
 local needs_next_chunk = 0
 local buffer
 
-local speakers = peripheral.find("speaker") 
--- Check if speakers is nil OR if the table is empty
-if not speakers or #speakers == 0 then
-	print("Warning: No local speaker attached. Audio will only be broadcast via Rednet if a modem is available.")
+local speakers = { peripheral.find("speaker") }
+if #speakers == 0 then
+	error("No speakers attached. You need to connect a speaker to this computer. If this is an Advanced Noisy Pocket Computer, then this is a bug, and you should try restarting your Minecraft game.", 0)
 end
 
 -- Attempt to open rednet on all connected modem sides
@@ -354,11 +353,10 @@ function uiLoop()
 								term.write("Play now")
 								sleep(0.2)
 								in_search_result = false
-								if speakers then
-									for _, speaker in ipairs(speakers) do
-										speaker.stop()
-										os.queueEvent("playback_stopped")
-									end
+								for _, speaker in ipairs(speakers) do
+									speaker.stop()
+									os.queueEvent("playback_stopped")
+								end
 								-- Broadcast stop for previous song if any was playing
 								if playing_id then
 									rednet.broadcast({ type = "stop_audio", id = playing_id }, rednet_protocol)
@@ -441,10 +439,8 @@ function uiLoop()
 									if playing then
 										playing = false
 										local stopped_song_id = playing_id -- Capture before niling
-										if speakers then
-											for _, speaker in ipairs(speakers) do
-												speaker.stop()
-											end
+										for _, speaker in ipairs(speakers) do
+											speaker.stop()
 										end
 										os.queueEvent("playback_stopped") -- Signal local playback system
 										rednet.broadcast({ type = "stop_audio", id = stopped_song_id }, rednet_protocol)
@@ -480,11 +476,9 @@ function uiLoop()
 
 										is_error = false
 										if playing then
-											if speakers then
-												for _, speaker in ipairs(speakers) do
-													speaker.stop()
-													os.queueEvent("playback_stopped")
-												end
+											for _, speaker in ipairs(speakers) do
+												speaker.stop()
+												os.queueEvent("playback_stopped")
 											end
 											if skipped_song_id_for_rednet then
 												rednet.broadcast({ type = "stop_audio", id = skipped_song_id_for_rednet }, rednet_protocol)
@@ -620,10 +614,7 @@ function audioLoop()
 
 						os.queueEvent("redraw_screen")
 
-						if player_handle and player_handle.close then -- Ensure it's a closable handle
-							pcall(player_handle.close, player_handle) -- Safely attempt to close
-						end
-						player_handle = nil -- Set to nil after closing or if it was never valid for this song end
+						player_handle.close()
 						needs_next_chunk = 0
 						break
 					else
@@ -635,62 +626,55 @@ function audioLoop()
 						buffer = decoder(chunk)
 						
 						-- Broadcast audio chunk via Rednet
-						if rednet.isOpen() then -- Check if modem is actually open and ready
-						    rednet.broadcast({ type = "audio_chunk", buffer = buffer, volume = volume, id = playing_id }, rednet_protocol)
+						rednet.broadcast({ type = "audio_chunk", buffer = buffer, volume = volume, id = playing_id }, rednet_protocol)
+						
+						local fn = {}
+						for i, speaker in ipairs(speakers) do 
+							fn[i] = function()
+								local name = peripheral.getName(speaker)
+								if #speakers > 1 then
+									if speaker.playAudio(buffer, 0.0) then
+										parallel.waitForAny(
+											function()
+												repeat until select(2, os.pullEvent("speaker_audio_empty")) == name
+											end,
+											function()
+												local event = os.pullEvent("playback_stopped")
+												return
+											end
+										)
+										if not playing or playing_id ~= thisnowplayingid then
+											return
+										end
+									end
+								else
+									while not speaker.playAudio(buffer, 0.0) do
+										parallel.waitForAny(
+											function()
+												repeat until select(2, os.pullEvent("speaker_audio_empty")) == name
+											end,
+											function()
+												local event = os.pullEvent("playback_stopped")
+												return
+											end
+										)
+										if not playing or playing_id ~= thisnowplayingid then
+											return
+										end
+									end
+								end
+								if not playing or playing_id ~= thisnowplayingid then
+									return
+								end
+							end
 						end
 						
-						-- Only attempt local playback if speakers is not nil and the table is not empty
-						if speakers and #speakers > 0 then 
-						    local fn = {}
-						    for i, current_speaker_obj in ipairs(speakers) do 
-							    fn[i] = function()
-								    local name = peripheral.getName(current_speaker_obj)
-								    if #speakers > 1 then -- Logic for multiple local speakers
-									    if current_speaker_obj.playAudio(buffer, volume) then
-										    parallel.waitForAny(
-											    function()
-												    repeat until select(2, os.pullEvent("speaker_audio_empty")) == name
-											    end,
-											    function()
-												    local event_type, param1 = os.pullEvent("playback_stopped") 
-												    return 
-											    end
-										    )
-										    if not playing or playing_id ~= thisnowplayingid then
-											    return
-										    end
-									    end
-								    else -- Logic for a single local speaker
-									    while not current_speaker_obj.playAudio(buffer, volume) do
-										    parallel.waitForAny(
-											    function()
-												    repeat until select(2, os.pullEvent("speaker_audio_empty")) == name
-											    end,
-											    function()
-												    local event_type, param1 = os.pullEvent("playback_stopped")
-												    return 
-											    end
-										    )
-										    if not playing or playing_id ~= thisnowplayingid then
-											    return 
-										    end
-									    end
-								    end
-								    -- Check if playback stopped during the operation for this speaker
-								    if not playing or playing_id ~= thisnowplayingid then
-									    return
-								    end
-							    end
-						    end
-						
-						    local ok, err = pcall(parallel.waitForAll, table.unpack(fn))
-						    if not ok then
-                                print("Error during local audio playback: " .. tostring(err))
-							    needs_next_chunk = 2
-							    is_error = true 
-							    break -- Exit chunk processing loop if local playback fails
-						    end
-                        end
+						local ok, err = pcall(parallel.waitForAll, table.unpack(fn))
+						if not ok then
+							needs_next_chunk = 2
+							is_error = true
+							break
+						end
 						
 						-- If we're not playing anymore, exit the chunk processing loop
 						if not playing or playing_id ~= thisnowplayingid then
@@ -760,14 +744,9 @@ function httpLoop()
 					playing_id = nil
 					-- Close the handle if it was provided with http_failure (depends on CC version/implementation)
 					if reason_or_handle and type(reason_or_handle) == "table" and reason_or_handle.close then
-						pcall(reason_or_handle.close, reason_or_handle) -- Safely close the event-specific handle
+						reason_or_handle.close()
 					end
-					-- Close and nil the main player_handle, as the download it was for has failed
-					if player_handle and player_handle.close then
-						pcall(player_handle.close, player_handle) -- Safely close the global player_handle
-					end
-					player_handle = nil -- Crucially, set to nil
-
+					if player_handle and player_handle.close then player_handle.close() end
 					os.queueEvent("redraw_screen")
 					os.queueEvent("audio_update")
 				end
