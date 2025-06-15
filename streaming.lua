@@ -33,9 +33,9 @@ local decoder = require "cc.audio.dfpwm".make_decoder()
 local needs_next_chunk = 0
 local buffer
 
-local speakers = peripheral.find("speaker") -- Corrected: directly use the table returned by find
-if #speakers == 0 then
-	-- Changed from error to a warning if no local speakers are found
+local speakers = peripheral.find("speaker") 
+-- Check if speakers is nil OR if the table is empty
+if not speakers or #speakers == 0 then
 	print("Warning: No local speaker attached. Audio will only be broadcast via Rednet if a modem is available.")
 end
 
@@ -615,7 +615,10 @@ function audioLoop()
 
 						os.queueEvent("redraw_screen")
 
-						player_handle.close()
+						if player_handle and player_handle.close then -- Ensure it's a closable handle
+							pcall(player_handle.close, player_handle) -- Safely attempt to close
+						end
+						player_handle = nil -- Set to nil after closing or if it was never valid for this song end
 						needs_next_chunk = 0
 						break
 					else
@@ -631,7 +634,8 @@ function audioLoop()
 						    rednet.broadcast({ type = "audio_chunk", buffer = buffer, volume = volume, id = playing_id }, rednet_protocol)
 						end
 						
-						if #speakers > 0 then -- Only attempt local playback if speakers are attached
+						-- Only attempt local playback if speakers is not nil and the table is not empty
+						if speakers and #speakers > 0 then 
 						    local fn = {}
 						    for i, current_speaker_obj in ipairs(speakers) do 
 							    fn[i] = function()
@@ -751,9 +755,14 @@ function httpLoop()
 					playing_id = nil
 					-- Close the handle if it was provided with http_failure (depends on CC version/implementation)
 					if reason_or_handle and type(reason_or_handle) == "table" and reason_or_handle.close then
-						reason_or_handle.close()
+						pcall(reason_or_handle.close, reason_or_handle) -- Safely close the event-specific handle
 					end
-					if player_handle and player_handle.close then player_handle.close() end
+					-- Close and nil the main player_handle, as the download it was for has failed
+					if player_handle and player_handle.close then
+						pcall(player_handle.close, player_handle) -- Safely close the global player_handle
+					end
+					player_handle = nil -- Crucially, set to nil
+
 					os.queueEvent("redraw_screen")
 					os.queueEvent("audio_update")
 				end
