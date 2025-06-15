@@ -34,13 +34,18 @@ while true do
 
     if protocol == rednet_protocol then
         if message.type == "audio_chunk" then
-            if message.id == current_song_id or not current_song_id then -- Play if it's the current song or the first chunk of a new song
-                if not current_song_id then
-                    current_song_id = message.id
-                    term.setCursorPos(1, 3)
-                    term.clearLine()
-                    print("Playing new song: " .. (message.id or "Unknown ID"))
-                end
+            if message.id ~= current_song_id then
+                -- New song detected (or first ever song, or song changed without explicit stop for old one)
+                speaker.stop() -- Ensure any previous audio is stopped
+                current_song_id = message.id
+                term.setCursorPos(1, 3)
+                term.clearLine()
+                print("Playing new song: " .. (message.id or "Unknown ID"))
+                -- The volume for the new song will be set from this first chunk if provided
+            end
+
+            -- Play the chunk if it belongs to the (now potentially updated) current_song_id
+            if message.id == current_song_id then
                 if message.volume then current_volume = message.volume end
                 speaker.playAudio(message.buffer, current_volume)
             end
