@@ -354,10 +354,11 @@ function uiLoop()
 								term.write("Play now")
 								sleep(0.2)
 								in_search_result = false
-								for _, speaker in ipairs(speakers) do
-									speaker.stop()
-									os.queueEvent("playback_stopped")
-								end
+								if speakers then
+									for _, speaker in ipairs(speakers) do
+										speaker.stop()
+										os.queueEvent("playback_stopped")
+									end
 								-- Broadcast stop for previous song if any was playing
 								if playing_id then
 									rednet.broadcast({ type = "stop_audio", id = playing_id }, rednet_protocol)
@@ -440,8 +441,10 @@ function uiLoop()
 									if playing then
 										playing = false
 										local stopped_song_id = playing_id -- Capture before niling
-										for _, speaker in ipairs(speakers) do
-											speaker.stop()
+										if speakers then
+											for _, speaker in ipairs(speakers) do
+												speaker.stop()
+											end
 										end
 										os.queueEvent("playback_stopped") -- Signal local playback system
 										rednet.broadcast({ type = "stop_audio", id = stopped_song_id }, rednet_protocol)
@@ -477,9 +480,11 @@ function uiLoop()
 
 										is_error = false
 										if playing then
-											for _, speaker in ipairs(speakers) do
-												speaker.stop()
-												os.queueEvent("playback_stopped")
+											if speakers then
+												for _, speaker in ipairs(speakers) do
+													speaker.stop()
+													os.queueEvent("playback_stopped")
+												end
 											end
 											if skipped_song_id_for_rednet then
 												rednet.broadcast({ type = "stop_audio", id = skipped_song_id_for_rednet }, rednet_protocol)
