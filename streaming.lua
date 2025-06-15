@@ -1,4 +1,4 @@
-local api_base_url = "https://ipod-2to6magyna-uc.a.run.app/"
+local api_base_url = "https://ipod-2to6magy..."
 local version = "2.1"
 local rednet_protocol = "MufaroSyncStream" -- Protocol for Rednet communication
 
@@ -629,52 +629,52 @@ function audioLoop()
 						rednet.broadcast({ type = "audio_chunk", buffer = buffer, volume = volume, id = playing_id }, rednet_protocol)
 						
 						local fn = {}
-						for i, speaker in ipairs(speakers) do 
-							fn[i] = function()
-								local name = peripheral.getName(speaker)
-								if #speakers > 1 then
-									if speaker.playAudio(buffer, volume) then
-										parallel.waitForAny(
-											function()
-												repeat until select(2, os.pullEvent("speaker_audio_empty")) == name
-											end,
-											function()
-												local event = os.pullEvent("playback_stopped")
-												return
-											end
-										)
-										if not playing or playing_id ~= thisnowplayingid then
-											return
-										end
-									end
-								else
-									while not speaker.playAudio(buffer, volume) do
-										parallel.waitForAny(
-											function()
-												repeat until select(2, os.pullEvent("speaker_audio_empty")) == name
-											end,
-											function()
-												local event = os.pullEvent("playback_stopped")
-												return
-											end
-										)
-										if not playing or playing_id ~= thisnowplayingid then
-											return
-										end
-									end
-								end
-								if not playing or playing_id ~= thisnowplayingid then
-									return
-								end
-							end
-						end
+						-- for i, speaker in ipairs(speakers) do 
+						-- 	fn[i] = function()
+						-- 		local name = peripheral.getName(speaker)
+						-- 		if #speakers > 1 then
+						-- 			if speaker.playAudio(buffer, volume) then
+						-- 				parallel.waitForAny(
+						-- 					function()
+						-- 						repeat until select(2, os.pullEvent("speaker_audio_empty")) == name
+						-- 					end,
+						-- 					function()
+						-- 						local event = os.pullEvent("playback_stopped")
+						-- 						return
+						-- 					end
+						-- 				)
+						-- 				if not playing or playing_id ~= thisnowplayingid then
+						-- 					return
+						-- 				end
+						-- 			end
+						-- 		else
+						-- 			while not speaker.playAudio(buffer, volume) do
+						-- 				parallel.waitForAny(
+						-- 					function()
+						-- 						repeat until select(2, os.pullEvent("speaker_audio_empty")) == name
+						-- 					end,
+						-- 					function()
+						-- 						local event = os.pullEvent("playback_stopped")
+						-- 						return
+						-- 					end
+						-- 				)
+						-- 				if not playing or playing_id ~= thisnowplayingid then
+						-- 					return
+						-- 				end
+						-- 			end
+						-- 		end
+						-- 		if not playing or playing_id ~= thisnowplayingid then
+						-- 			return
+						-- 		end
+						-- 	end
+						-- end
 						
-						local ok, err = pcall(parallel.waitForAll, table.unpack(fn))
-						if not ok then
-							needs_next_chunk = 2
-							is_error = true
-							break
-						end
+						-- local ok, err = pcall(parallel.waitForAll, table.unpack(fn))
+						-- if not ok then
+						-- 	needs_next_chunk = 2
+						-- 	is_error = true
+						-- 	break
+						-- end
 						
 						-- If we're not playing anymore, exit the chunk processing loop
 						if not playing or playing_id ~= thisnowplayingid then

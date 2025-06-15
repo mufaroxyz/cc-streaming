@@ -35,7 +35,7 @@ while true do
     if protocol == rednet_protocol then
         if message.type == "audio_chunk" then
             if message.id == current_song_id or not current_song_id then -- Play if it's the current song or the first chunk of a new song
-                if not current_song_id then -- This is the first chunk of a NEW song
+                if not current_song_id then
                     current_song_id = message.id
                     term.setCursorPos(1, 3)
                     term.clearLine()
