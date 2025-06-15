@@ -1,6 +1,6 @@
-local api_base_url = "https://ipod-2to6magy..."
+local api_base_url = "https://ipod-2to6magyna-uc.a.run.app/"
 local version = "2.1"
-local rednet_protocol = "iPodAudioStream_v1" -- Protocol for Rednet communication
+local rednet_protocol = "MufaroSyncStream" -- Protocol for Rednet communication
 
 local width, height = term.getSize()
 local tab = 1
