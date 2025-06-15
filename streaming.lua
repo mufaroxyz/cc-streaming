@@ -628,56 +628,52 @@ function audioLoop()
 						-- Broadcast audio chunk via Rednet
 						rednet.broadcast({ type = "audio_chunk", buffer = buffer, volume = volume, id = playing_id }, rednet_protocol)
 						
-						local fn = {}
-						-- for i, speaker in ipairs(speakers) do 
-						-- 	fn[i] = function()
-						-- 		local name = peripheral.getName(speaker)
-						-- 		if #speakers > 1 then
-						-- 			if speaker.playAudio(buffer, volume) then
-						-- 				parallel.waitForAny(
-						-- 					function()
-						-- 						repeat until select(2, os.pullEvent("speaker_audio_empty")) == name
-						-- 					end,
-						-- 					function()
-						-- 						local event = os.pullEvent("playback_stopped")
-						-- 						return
-						-- 					end
-						-- 				)
-						-- 				if not playing or playing_id ~= thisnowplayingid then
-						-- 					return
-						-- 				end
-						-- 			end
-						-- 		else
-						-- 			while not speaker.playAudio(buffer, volume) do
-						-- 				parallel.waitForAny(
-						-- 					function()
-						-- 						repeat until select(2, os.pullEvent("speaker_audio_empty")) == name
-						-- 					end,
-						-- 					function()
-						-- 						local event = os.pullEvent("playback_stopped")
-						-- 						return
-						-- 					end
-						-- 				)
-						-- 				if not playing or playing_id ~= thisnowplayingid then
-						-- 					return
-						-- 				end
-						-- 			end
-						-- 		end
-						-- 		if not playing or playing_id ~= thisnowplayingid then
-						-- 			return
-						-- 		end
-						-- 	end
-						-- end
+						-- THE CRITICAL TIMING PART
+						local pcm_buffer_duration = #buffer / 48000 -- Assuming 8-bit mono PCM at 48kHz
+						local adjusted_duration = pcm_buffer_duration * 0.98 -- Adjust to be slightly shorter
 						
-						-- local ok, err = pcall(parallel.waitForAll, table.unpack(fn))
-						-- if not ok then
-						-- 	needs_next_chunk = 2
-						-- 	is_error = true
-						-- 	break
-						-- end
+						if adjusted_duration <= 0 then adjusted_duration = 0.01 end -- Ensure non-negative sleep
+
+						local timer_id = os.startTimer(adjusted_duration)
+						local stop_reason = nil
+
+						parallel.waitForAny(
+							function() -- Timer branch
+								local event_name_timer, id_timer = os.pullEvent("timer")
+								if id_timer == timer_id then
+									-- Timer completed normally
+								else
+									-- It's possible another timer event was pulled, requeue it
+									os.queueEvent("timer", id_timer)
+								end
+							end,
+							function() -- Stop condition branch
+								while true do
+									if not playing then
+										stop_reason = "stopped"
+										break
+									end
+									if playing_id ~= thisnowplayingid then
+										stop_reason = "skipped_or_new_song"
+										break
+									end
+									os.sleep(0) -- Yield to allow flags to update and timer to progress in the other branch
+								end
+							end
+						)
+
+						if stop_reason then
+							-- If stop_reason is set, the stop condition branch completed.
+							-- This means we should break the chunk processing loop.
+							if player_handle and player_handle.close then player_handle.close() end -- ensure http stream is closed
+							needs_next_chunk = 0 -- prevent further processing of this song
+							break -- from inner chunk loop
+						end
 						
-						-- If we're not playing anymore, exit the chunk processing loop
+						-- If we're not playing anymore (e.g. stop_reason was set, or flags changed right after parallel), exit the chunk processing loop
 						if not playing or playing_id ~= thisnowplayingid then
+							if player_handle and player_handle.close then player_handle.close() end
+							needs_next_chunk = 0
 							break
 						end
 					end
