@@ -1,6 +1,7 @@
 -- Speaker Client for ComputerCraft iPod Streaming
 local rednet_protocol = "iPodAudioStream_v1"
 local speaker = peripheral.find("speaker")
+local SYNC_DELAY = 0.3 -- Seconds to delay playback on client to sync with server
 
 if not speaker then
     error("No speaker attached! Please connect a speaker.", 0)
@@ -42,6 +43,7 @@ while true do
                     print("Playing new song: " .. (message.id or "Unknown ID"))
                 end
                 if message.volume then current_volume = message.volume end
+                os.sleep(SYNC_DELAY) -- Added delay for synchronization
                 speaker.playAudio(message.buffer, current_volume)
             end
         elseif message.type == "stop_audio" then
